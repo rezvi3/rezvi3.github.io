@@ -56,6 +56,7 @@
   var lastPointerClient = { x: null, y: null };
   var hasInteracted = false;
   var isPointerInWindow = false;
+  var isTouching = false;
   var lastPointerMoveTime = 0;
   var IDLE_DELAY = 1800; // ms of inactivity before lemniscate begins
   var lemniscateBlend = 1.0; // Starts at 1.0 so initial page loads with the visible lemniscate
@@ -216,7 +217,10 @@
           var now = performance.now();
           var isIdle = !hasInteracted || !isPointerInWindow || ((now - lastPointerMoveTime) > IDLE_DELAY);
 
-          if (isIdle) {
+          if (isTouching) {
+            // Instant tracking: clear idle blend immediately so lines follow the hand without delay
+            lemniscateBlend = 0;
+          } else if (isIdle) {
             // Smoothly ramp blend weight towards 1.0 (flowing into visible lemniscate)
             if (lemniscateBlend < 1) {
               lemniscateBlend += (1 - lemniscateBlend) * 0.035;
@@ -256,10 +260,12 @@
           var targetY = pointerWorldTarget.y * (1 - lemniscateBlend) + lemY * lemniscateBlend;
           var targetZ = 0 * (1 - lemniscateBlend) + lemZ * lemniscateBlend;
 
-          // Responsive 3D spring-physics tracking
-          tubesApp.tubes.target.x += (targetX - tubesApp.tubes.target.x) * 0.28;
-          tubesApp.tubes.target.y += (targetY - tubesApp.tubes.target.y) * 0.28;
-          tubesApp.tubes.target.z += (targetZ - tubesApp.tubes.target.z) * 0.28;
+          // When touching with hand, follow hand responsively and immediately (* 0.75).
+          // Desktop cursor and idle lemniscate retain the exact * 0.28 spring physics.
+          var followSpeed = isTouching ? 0.75 : 0.28;
+          tubesApp.tubes.target.x += (targetX - tubesApp.tubes.target.x) * followSpeed;
+          tubesApp.tubes.target.y += (targetY - tubesApp.tubes.target.y) * followSpeed;
+          tubesApp.tubes.target.z += (targetZ - tubesApp.tubes.target.z) * followSpeed;
 
           tubesApp.tubes.update(time);
         };
@@ -282,41 +288,60 @@
     }
   }
 
-  // Global cursor and touch tracking on window (fluid steering across mouse & mobile touch)
-  window.addEventListener('pointermove', function (e) {
-    updatePointer(e.clientX, e.clientY);
-  }, { passive: true });
-
-  window.addEventListener('pointerdown', function (e) {
-    updatePointer(e.clientX, e.clientY);
-  }, { passive: true });
-
-  window.addEventListener('touchstart', function (e) {
+  // Global pointer & touch tracking on document (capture phase ensures uninterrupted tracking across all DOM elements)
+  function handleTouch(e) {
+    isTouching = true;
+    isPointerInWindow = true;
+    hasInteracted = true;
+    lastPointerMoveTime = performance.now();
+    lemniscateBlend = 0;
     if (e.touches && e.touches[0]) {
       updatePointer(e.touches[0].clientX, e.touches[0].clientY);
     }
-  }, { passive: true });
+  }
 
-  window.addEventListener('touchmove', function (e) {
-    if (e.touches && e.touches[0]) {
-      updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+  function handleTouchEnd(e) {
+    isTouching = false;
+    lastPointerMoveTime = performance.now();
+    if (e.changedTouches && e.changedTouches[0]) {
+      updatePointer(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
     }
-  }, { passive: true });
+  }
 
-  // When touch or cursor lifts, smoothly return to idle lemniscate after IDLE_DELAY
-  window.addEventListener('touchend', function () {
-    lastPointerMoveTime = performance.now();
-  }, { passive: true });
+  document.addEventListener('touchstart', handleTouch, { passive: true, capture: true });
+  document.addEventListener('touchmove', handleTouch, { passive: true, capture: true });
+  document.addEventListener('touchend', handleTouchEnd, { passive: true, capture: true });
+  document.addEventListener('touchcancel', handleTouchEnd, { passive: true, capture: true });
 
-  window.addEventListener('touchcancel', function () {
-    lastPointerMoveTime = performance.now();
-  }, { passive: true });
-
-  window.addEventListener('pointerup', function (e) {
+  document.addEventListener('pointerdown', function (e) {
     if (e.pointerType === 'touch') {
-      lastPointerMoveTime = performance.now();
+      isTouching = true;
+      lemniscateBlend = 0;
     }
-  }, { passive: true });
+    updatePointer(e.clientX, e.clientY);
+  }, { passive: true, capture: true });
+
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') {
+      isTouching = true;
+      lemniscateBlend = 0;
+    }
+    updatePointer(e.clientX, e.clientY);
+  }, { passive: true, capture: true });
+
+  document.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'touch') {
+      isTouching = false;
+    }
+    lastPointerMoveTime = performance.now();
+  }, { passive: true, capture: true });
+
+  document.addEventListener('pointercancel', function (e) {
+    if (e.pointerType === 'touch') {
+      isTouching = false;
+    }
+    lastPointerMoveTime = performance.now();
+  }, { passive: true, capture: true });
 
   document.addEventListener('mouseleave', function () {
     isPointerInWindow = false;
