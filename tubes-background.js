@@ -56,10 +56,18 @@
   var lastPointerClient = { x: null, y: null };
   var hasInteracted = false;
   var isPointerInWindow = false;
-
   var lastPointerMoveTime = 0;
   var IDLE_DELAY = 1800; // ms of inactivity before lemniscate begins
   var lemniscateBlend = 1.0; // Starts at 1.0 so initial page loads with the visible lemniscate
+
+  function updatePixelRatio() {
+    if (!tubesApp || !tubesApp.three) return;
+    var dpr = window.devicePixelRatio || 1;
+    // Render at crisp, high-DPI Retina resolution (eliminates pixelated/jagged lines on mobile & desktop)
+    tubesApp.three.minPixelRatio = 1.0;
+    tubesApp.three.maxPixelRatio = Math.min(dpr, 2.0);
+    tubesApp.three.resize();
+  }
 
   function randomHex() {
     var letters = '56789ABCDEF';
@@ -178,16 +186,16 @@
       tubesApp = TubesCursor(canvas, {
         bloom: {
           threshold: 0,
-          strength: isMobile ? 1.05 : 1.5,
-          radius: isMobile ? 0.28 : 0.5
+          strength: isMobile ? 1.45 : 1.5,
+          radius: isMobile ? 0.45 : 0.5
         },
         tubes: {
-          count: isMobile ? 8 : 16,
-          minRadius: isMobile ? 0.005 : 0.005,
-          maxRadius: isMobile ? 0.032 : 0.05,
+          count: isMobile ? 14 : 16,
+          minRadius: 0.005,
+          maxRadius: isMobile ? 0.048 : 0.05,
           colors: initial.tubes,
           lights: {
-            intensity: prefersReduced ? 100 : (isMobile ? 140 : 220),
+            intensity: prefersReduced ? 100 : (isMobile ? 200 : 220),
             colors: initial.lights
           }
         }
@@ -195,16 +203,8 @@
 
       isInitialized = true;
 
-      // Optimize rendering and install continuous, fluid 3D cursor steering & idle lemniscate
+      // Render in razor-sharp Retina resolution and install continuous 3D cursor & touch steering
       if (tubesApp && tubesApp.three && tubesApp.tubes) {
-        var updatePixelRatio = function () {
-          var isMob = checkIsMobile();
-          // Mobile GPUs benefit from 1.0 DPR for native 60-120fps glide and cool thermals
-          tubesApp.three.minPixelRatio = 1;
-          tubesApp.three.maxPixelRatio = isMob ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5);
-          tubesApp.three.resize();
-        };
-
         updatePixelRatio();
 
         tubesApp.three.onBeforeRender = function (time) {
@@ -282,45 +282,40 @@
     }
   }
 
-  // Global cursor and touch tracking on window (100% uninterrupted by UI layers)
-  var touchStartY = 0;
-  var isTouchScrolling = false;
-
+  // Global cursor and touch tracking on window (fluid steering across mouse & mobile touch)
   window.addEventListener('pointermove', function (e) {
-    if (e.pointerType === 'touch') return; // Handled specifically below to avoid touch-scroll thrashing
+    updatePointer(e.clientX, e.clientY);
+  }, { passive: true });
+
+  window.addEventListener('pointerdown', function (e) {
     updatePointer(e.clientX, e.clientY);
   }, { passive: true });
 
   window.addEventListener('touchstart', function (e) {
     if (e.touches && e.touches[0]) {
-      touchStartY = e.touches[0].clientY;
-      isTouchScrolling = false;
       updatePointer(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, { passive: true });
 
   window.addEventListener('touchmove', function (e) {
     if (e.touches && e.touches[0]) {
-      var dy = Math.abs(e.touches[0].clientY - touchStartY);
-      if (dy > 12) {
-        isTouchScrolling = true;
-      }
-      // When scrolling through content on mobile, keep the lemniscate gliding gracefully
-      if (!isTouchScrolling) {
-        updatePointer(e.touches[0].clientX, e.touches[0].clientY);
-      }
+      updatePointer(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, { passive: true });
 
-  // When fingers lift on mobile, smoothly return to idle lemniscate
+  // When touch or cursor lifts, smoothly return to idle lemniscate after IDLE_DELAY
   window.addEventListener('touchend', function () {
-    isTouchScrolling = false;
     lastPointerMoveTime = performance.now();
   }, { passive: true });
 
   window.addEventListener('touchcancel', function () {
-    isTouchScrolling = false;
     lastPointerMoveTime = performance.now();
+  }, { passive: true });
+
+  window.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'touch') {
+      lastPointerMoveTime = performance.now();
+    }
   }, { passive: true });
 
   document.addEventListener('mouseleave', function () {
@@ -337,10 +332,8 @@
   // Handle mobile screen orientation change smoothly
   window.addEventListener('orientationchange', function () {
     setTimeout(function () {
-      if (tubesApp && tubesApp.three) {
-        var isMob = checkIsMobile();
-        tubesApp.three.maxPixelRatio = isMob ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5);
-        tubesApp.three.resize();
+      if (tubesApp && tubesApp.three && typeof updatePixelRatio === 'function') {
+        updatePixelRatio();
       }
       if (lastPointerClient.x !== null) {
         updatePointer(lastPointerClient.x, lastPointerClient.y);
