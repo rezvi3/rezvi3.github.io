@@ -251,6 +251,20 @@
       togglePlayPause();
     });
 
+    // Viewport-aware video playback: pause when offscreen to preserve 100% GPU bandwidth
+    if ('IntersectionObserver' in window) {
+      var videoObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            editVideo.play().catch(function () {});
+          } else {
+            editVideo.pause();
+          }
+        });
+      }, { threshold: 0.1 });
+      videoObserver.observe(editVideo);
+    }
+
     // Sound / Audio Controller
     function updateSoundUI(isMuted) {
       if (!soundToggleBtn) return;

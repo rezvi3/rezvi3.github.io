@@ -36,8 +36,8 @@ html, body {
    ========================================================================== */
 :root {
   --bg: #0a0a0a;
-  --bg-card: rgba(12, 12, 18, 0.65);
-  --bg-card-hover: rgba(18, 18, 28, 0.78);
+  --bg-card: rgba(13, 15, 25, 0.84);
+  --bg-card-hover: rgba(18, 20, 34, 0.9);
   --bg-glass-subtle: rgba(255, 255, 255, 0.05);
   --text: #ffffff;
   --muted: #d6dae2;
@@ -75,6 +75,19 @@ html {
   scroll-padding-top: 80px;
   -webkit-text-size-adjust: 100%;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Scroll performance: suspend expensive composite backdrop-filter and pointer events during scroll */
+body.is-scrolling .liquid-card,
+body.is-scrolling .creative-card,
+body.is-scrolling .writing-card,
+body.is-scrolling .tech-pill,
+body.is-scrolling .footer,
+body.is-scrolling .preview-badge,
+body.is-scrolling .metric-card {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none;
 }
 
 html.lenis, html.lenis body {

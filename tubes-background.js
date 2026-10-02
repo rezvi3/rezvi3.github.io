@@ -63,10 +63,9 @@
 
   function updatePixelRatio() {
     if (!tubesApp || !tubesApp.three) return;
-    var dpr = window.devicePixelRatio || 1;
-    // Render at crisp, high-DPI Retina resolution (eliminates pixelated/jagged lines on mobile & desktop)
+    // Cap pixel ratio to 1.0 to eliminate high-DPI GPU fillrate throttling on scroll
     tubesApp.three.minPixelRatio = 1.0;
-    tubesApp.three.maxPixelRatio = Math.min(dpr, 2.0);
+    tubesApp.three.maxPixelRatio = 1.0;
     tubesApp.three.resize();
   }
 
@@ -187,16 +186,16 @@
       tubesApp = TubesCursor(canvas, {
         bloom: {
           threshold: 0,
-          strength: isMobile ? 1.45 : 1.5,
-          radius: isMobile ? 0.45 : 0.5
+          strength: isMobile ? 0.95 : 1.1,
+          radius: isMobile ? 0.35 : 0.4
         },
         tubes: {
-          count: isMobile ? 14 : 16,
+          count: isMobile ? 8 : 10,
           minRadius: 0.005,
-          maxRadius: isMobile ? 0.048 : 0.05,
+          maxRadius: isMobile ? 0.042 : 0.046,
           colors: initial.tubes,
           lights: {
-            intensity: prefersReduced ? 100 : (isMobile ? 200 : 220),
+            intensity: prefersReduced ? 100 : (isMobile ? 180 : 200),
             colors: initial.lights
           }
         }
@@ -204,7 +203,7 @@
 
       isInitialized = true;
 
-      // Render in razor-sharp Retina resolution and install continuous 3D cursor & touch steering
+      // Render in razor-sharp resolution and install continuous 3D cursor & touch steering
       if (tubesApp && tubesApp.three && tubesApp.tubes) {
         updatePixelRatio();
 
@@ -275,6 +274,50 @@
             updatePointer(lastPointerClient.x, lastPointerClient.y);
           }
         };
+
+        // Intelligent animation suspension: Pause 3D render loop during scroll & when Hero is offscreen
+        var isScrollPaused = false;
+        var isHeroVisible = true;
+        var scrollTimer = null;
+
+        function pauseLoop() {
+          if (!tubesApp || !tubesApp.three || !tubesApp.three.renderer || !tubesApp.three.renderer._animation) return;
+          tubesApp.three.renderer._animation.stop();
+        }
+
+        function resumeLoop() {
+          if (!tubesApp || !tubesApp.three || !tubesApp.three.renderer || !tubesApp.three.renderer._animation) return;
+          if (isHeroVisible && !isScrollPaused) {
+            tubesApp.three.renderer._animation.start();
+          }
+        }
+
+        window.addEventListener('scroll', function () {
+          if (!isScrollPaused) {
+            isScrollPaused = true;
+            pauseLoop();
+          }
+          clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(function () {
+            isScrollPaused = false;
+            resumeLoop();
+          }, 80);
+        }, { passive: true });
+
+        var heroSection = document.querySelector('.hero-section') || document.querySelector('.hero-container');
+        if (heroSection && 'IntersectionObserver' in window) {
+          var heroObs = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              isHeroVisible = entry.isIntersecting;
+              if (isHeroVisible) {
+                resumeLoop();
+              } else {
+                pauseLoop();
+              }
+            });
+          }, { threshold: 0.05 });
+          heroObs.observe(heroSection);
+        }
       }
 
       window.TubesBackground = {
