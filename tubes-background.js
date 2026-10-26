@@ -275,49 +275,16 @@
           }
         };
 
-        // Intelligent animation suspension: Pause 3D render loop during scroll & when Hero is offscreen
-        var isScrollPaused = false;
-        var isHeroVisible = true;
-        var scrollTimer = null;
-
-        function pauseLoop() {
+        // Seamless continuous rendering: keep fluid 60-120fps motion across entire page scroll.
+        // Suspend rendering ONLY when browser tab is inactive to preserve battery & GPU cycles.
+        document.addEventListener('visibilitychange', function () {
           if (!tubesApp || !tubesApp.three || !tubesApp.three.renderer || !tubesApp.three.renderer._animation) return;
-          tubesApp.three.renderer._animation.stop();
-        }
-
-        function resumeLoop() {
-          if (!tubesApp || !tubesApp.three || !tubesApp.three.renderer || !tubesApp.three.renderer._animation) return;
-          if (isHeroVisible && !isScrollPaused) {
+          if (document.hidden) {
+            tubesApp.three.renderer._animation.stop();
+          } else {
             tubesApp.three.renderer._animation.start();
           }
-        }
-
-        window.addEventListener('scroll', function () {
-          if (!isScrollPaused) {
-            isScrollPaused = true;
-            pauseLoop();
-          }
-          clearTimeout(scrollTimer);
-          scrollTimer = setTimeout(function () {
-            isScrollPaused = false;
-            resumeLoop();
-          }, 80);
-        }, { passive: true });
-
-        var heroSection = document.querySelector('.hero-section') || document.querySelector('.hero-container');
-        if (heroSection && 'IntersectionObserver' in window) {
-          var heroObs = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-              isHeroVisible = entry.isIntersecting;
-              if (isHeroVisible) {
-                resumeLoop();
-              } else {
-                pauseLoop();
-              }
-            });
-          }, { threshold: 0.05 });
-          heroObs.observe(heroSection);
-        }
+        });
       }
 
       window.TubesBackground = {

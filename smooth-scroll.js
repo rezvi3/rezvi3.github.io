@@ -29,16 +29,6 @@
 
     window.lenis = lenis;
 
-    // Add .is-scrolling to body during active scroll to suspend heavy blur filters
-    var scrollTimer = null;
-    window.addEventListener('scroll', function () {
-      document.body.classList.add('is-scrolling');
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(function () {
-        document.body.classList.remove('is-scrolling');
-      }, 90);
-    }, { passive: true });
-
     // Direct header state synchronization without polling or layout thrashing
     var header = document.querySelector('.header');
     if (header) {
